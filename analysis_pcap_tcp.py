@@ -1,29 +1,53 @@
 import dpkt
+import copy
 
 
-# adds stream to list of streams if not there before
+# sorts the packets into respective flows organized in the form of lists
+def sort_flows(eth):
+    # base case
+    if len(flows[0]) == 0:
+        flows[0].append(eth)
+        return
+    port = eth.data.data.sport
+    if port == 80:
+        port = eth.data.data.dport
+    ports_to_compare = []
+    for flow in flows:
+        if len(flow) != 0:
+            port_value = flow[0].data.data.sport
+            if port_value == 80:
+                port_value = flow[0].data.data.dport
+            ports_to_compare.append(port_value)
+    for existing_port in ports_to_compare:
+        if existing_port == port:
+            flows[ports_to_compare.index(existing_port)].append(eth)
+            return
+    flows[len(ports_to_compare)].append(eth)
+
+
+# adds flow to list of streams if not there before
 def identify_streams(ip, tcp):
-    stream_index = [get_ip(ip.src), tcp.sport, get_ip(ip.dst), tcp.dport]
-    print(stream_index)
-    if len(streams) == 0:
-        streams.append(stream_index)
+    flow_index = [get_ip(ip.src), tcp.sport, get_ip(ip.dst), tcp.dport]
+    # print(flow_index)
+    if len(flow_ids) == 0:
+        flow_ids.append(flow_index)
     else:
-        unique_stream_flag = True
-        for stream in streams:
-            if stream == stream_index:
-                unique_stream_flag = False
-        if unique_stream_flag:
-            streams.append(stream_index)
-    filter_streams()
+        unique_flow_flag = True
+        for stream in flow_ids:
+            if stream == flow_index:
+                unique_flow_flag = False
+        if unique_flow_flag:
+            flow_ids.append(flow_index)
+    filter_flows()
 
 
-# communication from Host A on Port a to Host B on Port b is the same stream as Host B on Port b to Host A on Port a
-def filter_streams():
-    for stream in streams:
-        reverse_order = [stream[2], stream[3], stream[0], stream[1]]
-        for s in streams:
+# communication from Host A on Port a to Host B on Port b is the same flow as Host B on Port b to Host A on Port a
+def filter_flows():
+    for flow in flow_ids:
+        reverse_order = [flow[2], flow[3], flow[0], flow[1]]
+        for s in flow_ids:
             if reverse_order == s:
-                streams.remove(s)
+                flow_ids.remove(s)
 
 
 # returns the source/destination IP address
@@ -50,25 +74,33 @@ def check_flows(tcp_to_check):
 def analyze_pcap_tcp():
     for ts, buf in pcap:
         eth = dpkt.ethernet.Ethernet(buf)
+        unsorted_packet.append(eth)
         ip = eth.data
         tcp = ip.data
         if check_flows(tcp):
-            global tcp_flows
-            tcp_flows = tcp_flows + 1
+            flows.append([])
         identify_streams(ip, tcp)
     # print(eth)
     # print(ip.src)
     # print(tcp.sport)
-    print(tcp)
+    # print(tcp)
 
 
-tcp_flows = 0
-streams = []
+unsorted_packet = []
+flows = []
+flow_ids = []
 file_name = 'assignment2.pcap'  # sys.argv[1]
 f = open(file_name, 'rb')
 pcap = dpkt.pcap.Reader(f)
 analyze_pcap_tcp()
-print(tcp_flows)
-print(len(streams))
-print(streams)
+print(len(flow_ids))
+print(flow_ids)
+
+for packet in unsorted_packet:
+    sort_flows(packet)
+
+print(unsorted_packet.__len__())
+print(len(flows[0]))
+print(len(flows[1]))
+print(len(flows[2]))
 f.close()
