@@ -1,5 +1,4 @@
 import dpkt
-import copy
 
 
 # sorts the packets into respective flows organized in the form of lists
@@ -80,27 +79,40 @@ def analyze_pcap_tcp():
         if check_flows(tcp):
             flows.append([])
         identify_streams(ip, tcp)
-    # print(eth)
-    # print(ip.src)
-    # print(tcp.sport)
-    # print(tcp)
 
 
 unsorted_packet = []
 flows = []
 flow_ids = []
+
 file_name = 'assignment2.pcap'  # sys.argv[1]
 f = open(file_name, 'rb')
 pcap = dpkt.pcap.Reader(f)
+
 analyze_pcap_tcp()
+
 print(len(flow_ids))
 print(flow_ids)
 
 for packet in unsorted_packet:
     sort_flows(packet)
+print(flows[0][4].data.data.seq)
+print(flows[0][4].data.data.ack)
 
 print(unsorted_packet.__len__())
 print(len(flows[0]))
 print(len(flows[1]))
 print(len(flows[2]))
+
+print(str(len(flows)) + " TCP flows initiated from sender")
+for id in flow_ids:
+    num = flow_ids.index(id)
+    print("Source: " + flow_ids[num][0] + " at Port: " + str(flow_ids[num][1]) + " | Destination: " + flow_ids[num][2] + " at Port: " + str(flow_ids[num][3]))
+    print("\tTransaction 1: Sequence Number = " + str(flows[num][4].data.data.seq))
+    print("\t               Acknowledgement Number = " + str(flows[num][4].data.data.ack))
+    print("\t               Receive Window Size = "+ str(flows[num][4].data.data.win * 16384))
+    print("\tTransaction 2: Sequence Number = " + str(flows[num][5].data.data.seq))
+    print("\t               Acknowledgement Number = " + str(flows[num][5].data.data.ack))
+    print("\t               Receive Window Size = " + str(flows[num][5].data.data.win * 16384) + "\n")
+
 f.close()
