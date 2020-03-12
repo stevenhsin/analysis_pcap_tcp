@@ -1,46 +1,41 @@
 import dpkt
 
 
+# a packet that contains the timestamp and information encapsulated in Ethernet
+class Packet:
+    def __init__(self, timestamp, eth):
+        self.ts = timestamp
+        self.eth = eth
+
+
 # calculates the throughput from the first packet sent after the handshake to the FIN sent by the receiver
-def calculate_throughput():
+def calculate_throughput(num):
+    data_sent_over_flow = 0
+    for pkt in flows[num]:
+        tcp_size = len(pkt.data.data)  # length of TCP segment
+        data_sent_over_flow = data_sent_over_flow + tcp_size
     return 0
 
 
 # calculate scaling factor
 def calculate_scaling_factor(num):
-    parsed_opt = dpkt.tcp.parse_opts(flows[num][0].data.data.opts)
+    parsed_opt = dpkt.tcp.parse_opts(flows[num][0].eth.data.data.opts)
     shift_count = parsed_opt[5][1]
     scaling_factor = 2 ** int.from_bytes(shift_count, byteorder='big')
     return scaling_factor
 
 
 # sorts the packets into respective flows organized in the form of lists
-def sort_flows(eth):
+def sort_flows(packet):
     # base case
     if len(flows[0]) == 0:
-        flows[0].append(eth)
+        flows[0].append(packet)
         return
-    id_to_test = [get_ip(eth.data.src), eth.data.data.sport, get_ip(eth.data.dst), eth.data.data.dport]
+    id_to_test = [get_ip(packet.eth.data.src), packet.eth.data.data.sport, get_ip(packet.eth.data.dst), packet.eth.data.data.dport]
     for id_to_compare in flow_ids:
         if id_to_test == id_to_compare or [id_to_test[2],id_to_test[3],id_to_test[0],id_to_test[1]] == id_to_compare:
-            print(flow_ids.index(id_to_compare))
-            flows[flow_ids.index(id_to_compare)].append(eth)
+            flows[flow_ids.index(id_to_compare)].append(packet)
             return
-    # port = eth.data.data.sport
-    # if port == 80:
-    #     port = eth.data.data.dport
-    # ports_to_compare = []
-    # for flow in flows:
-    #     if len(flow) != 0:
-    #         port_value = flow[0].data.data.sport
-    #         if port_value == 80:
-    #             port_value = flow[0].data.data.dport
-    #         ports_to_compare.append(port_value)
-    # for existing_port in ports_to_compare:
-    #     if existing_port == port:
-    #         flows[ports_to_compare.index(existing_port)].append(eth)
-    #         return
-    # flows[len(ports_to_compare)].append(eth)
 
 
 # adds flow to list of streams if not there before
@@ -91,7 +86,8 @@ def check_flows(tcp_to_check):
 def analyze_pcap_tcp():
     for ts, buf in pcap:
         eth = dpkt.ethernet.Ethernet(buf)
-        unsorted_packet.append(eth)
+        packet = Packet(ts, eth)
+        unsorted_packet.append(packet)
         ip = eth.data
         tcp = ip.data
         if check_flows(tcp):
@@ -112,10 +108,10 @@ analyze_pcap_tcp()
 print(len(flow_ids))
 print(flow_ids)
 
-for packet in unsorted_packet:
-    sort_flows(packet)
-print(flows[0][4].data.data.seq)
-print(flows[0][4].data.data.ack)
+for pkt in unsorted_packet:
+    sort_flows(pkt)
+print(flows[0][4].eth.data.data.seq)
+print(flows[0][4].eth.data.data.ack)
 
 print(unsorted_packet.__len__())
 print(len(flows[0]))
@@ -125,15 +121,14 @@ print(len(flows[2]))
 print(str(len(flows)) + " TCP flows initiated from sender")
 for id in flow_ids:
     num = flow_ids.index(id)
+    print(flows[num][0].ts)
     scaling_factor = calculate_scaling_factor(num)
-    print(scaling_factor)
-    print(len(flows[num][3].data.data))  # length of TCP segment
     print("Source: " + flow_ids[num][0] + " at Port: " + str(flow_ids[num][1]) + " | Destination: " + flow_ids[num][2] + " at Port: " + str(flow_ids[num][3]))
-    print("\tTransaction 1: Sequence Number = " + str(flows[num][3].data.data.seq))
-    print("\t               Acknowledgement Number = " + str(flows[num][3].data.data.ack))
-    print("\t               Receive Window Size = " + str(flows[num][3].data.data.win * scaling_factor))
-    print("\tTransaction 2: Sequence Number = " + str(flows[num][4].data.data.seq))
-    print("\t               Acknowledgement Number = " + str(flows[num][4].data.data.ack))
-    print("\t               Receive Window Size = " + str(flows[num][4].data.data.win * scaling_factor) + "\n")
+    print("\tTransaction 1: Sequence Number = " + str(flows[num][3].eth.data.data.seq))
+    print("\t               Acknowledgement Number = " + str(flows[num][3].eth.data.data.ack))
+    print("\t               Receive Window Size = " + str(flows[num][3].eth.data.data.win * scaling_factor))
+    print("\tTransaction 2: Sequence Number = " + str(flows[num][4].eth.data.data.seq))
+    print("\t               Acknowledgement Number = " + str(flows[num][4].eth.data.data.ack))
+    print("\t               Receive Window Size = " + str(flows[num][4].eth.data.data.win * scaling_factor) + "\n")
 
 f.close()
