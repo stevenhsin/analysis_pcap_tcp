@@ -1,6 +1,11 @@
 import dpkt
 
 
+# calculates the throughput from the first packet sent after the handshake to the FIN sent by the receiver
+def calculate_throughput():
+    return 0
+
+
 # sorts the packets into respective flows organized in the form of lists
 def sort_flows(eth):
     # base case
@@ -107,6 +112,7 @@ print(len(flows[2]))
 print(str(len(flows)) + " TCP flows initiated from sender")
 for id in flow_ids:
     num = flow_ids.index(id)
+    print(len(flows[num][len(flows[num]) - 1].data.data.data) + 32)  # length of TCP segment
     print("Source: " + flow_ids[num][0] + " at Port: " + str(flow_ids[num][1]) + " | Destination: " + flow_ids[num][2] + " at Port: " + str(flow_ids[num][3]))
     print("\tTransaction 1: Sequence Number = " + str(flows[num][4].data.data.seq))
     print("\t               Acknowledgement Number = " + str(flows[num][4].data.data.ack))
