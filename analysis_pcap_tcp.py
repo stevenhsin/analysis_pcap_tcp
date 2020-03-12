@@ -6,39 +6,52 @@ def calculate_throughput():
     return 0
 
 
+# calculate scaling factor
+def calculate_scaling_factor(num):
+    parsed_opt = dpkt.tcp.parse_opts(flows[num][0].data.data.opts)
+    shift_count = parsed_opt[5][1]
+    scaling_factor = 2 ** int.from_bytes(shift_count, byteorder='big')
+    return scaling_factor
+
+
 # sorts the packets into respective flows organized in the form of lists
 def sort_flows(eth):
     # base case
     if len(flows[0]) == 0:
         flows[0].append(eth)
         return
-    port = eth.data.data.sport
-    if port == 80:
-        port = eth.data.data.dport
-    ports_to_compare = []
-    for flow in flows:
-        if len(flow) != 0:
-            port_value = flow[0].data.data.sport
-            if port_value == 80:
-                port_value = flow[0].data.data.dport
-            ports_to_compare.append(port_value)
-    for existing_port in ports_to_compare:
-        if existing_port == port:
-            flows[ports_to_compare.index(existing_port)].append(eth)
+    id_to_test = [get_ip(eth.data.src), eth.data.data.sport, get_ip(eth.data.dst), eth.data.data.dport]
+    for id_to_compare in flow_ids:
+        if id_to_test == id_to_compare or [id_to_test[2],id_to_test[3],id_to_test[0],id_to_test[1]] == id_to_compare:
+            print(flow_ids.index(id_to_compare))
+            flows[flow_ids.index(id_to_compare)].append(eth)
             return
-    flows[len(ports_to_compare)].append(eth)
+    # port = eth.data.data.sport
+    # if port == 80:
+    #     port = eth.data.data.dport
+    # ports_to_compare = []
+    # for flow in flows:
+    #     if len(flow) != 0:
+    #         port_value = flow[0].data.data.sport
+    #         if port_value == 80:
+    #             port_value = flow[0].data.data.dport
+    #         ports_to_compare.append(port_value)
+    # for existing_port in ports_to_compare:
+    #     if existing_port == port:
+    #         flows[ports_to_compare.index(existing_port)].append(eth)
+    #         return
+    # flows[len(ports_to_compare)].append(eth)
 
 
 # adds flow to list of streams if not there before
 def identify_streams(ip, tcp):
     flow_index = [get_ip(ip.src), tcp.sport, get_ip(ip.dst), tcp.dport]
-    # print(flow_index)
     if len(flow_ids) == 0:
         flow_ids.append(flow_index)
     else:
         unique_flow_flag = True
-        for stream in flow_ids:
-            if stream == flow_index:
+        for flow in flow_ids:
+            if flow == flow_index:
                 unique_flow_flag = False
         if unique_flow_flag:
             flow_ids.append(flow_index)
@@ -112,13 +125,15 @@ print(len(flows[2]))
 print(str(len(flows)) + " TCP flows initiated from sender")
 for id in flow_ids:
     num = flow_ids.index(id)
-    print(len(flows[num][len(flows[num]) - 1].data.data.data) + 32)  # length of TCP segment
+    scaling_factor = calculate_scaling_factor(num)
+    print(scaling_factor)
+    print(len(flows[num][3].data.data))  # length of TCP segment
     print("Source: " + flow_ids[num][0] + " at Port: " + str(flow_ids[num][1]) + " | Destination: " + flow_ids[num][2] + " at Port: " + str(flow_ids[num][3]))
-    print("\tTransaction 1: Sequence Number = " + str(flows[num][4].data.data.seq))
+    print("\tTransaction 1: Sequence Number = " + str(flows[num][3].data.data.seq))
+    print("\t               Acknowledgement Number = " + str(flows[num][3].data.data.ack))
+    print("\t               Receive Window Size = " + str(flows[num][3].data.data.win * scaling_factor))
+    print("\tTransaction 2: Sequence Number = " + str(flows[num][4].data.data.seq))
     print("\t               Acknowledgement Number = " + str(flows[num][4].data.data.ack))
-    print("\t               Receive Window Size = "+ str(flows[num][4].data.data.win * 16384))
-    print("\tTransaction 2: Sequence Number = " + str(flows[num][5].data.data.seq))
-    print("\t               Acknowledgement Number = " + str(flows[num][5].data.data.ack))
-    print("\t               Receive Window Size = " + str(flows[num][5].data.data.win * 16384) + "\n")
+    print("\t               Receive Window Size = " + str(flows[num][4].data.data.win * scaling_factor) + "\n")
 
 f.close()
