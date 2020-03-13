@@ -8,13 +8,58 @@ class Packet:
         self.eth = eth
 
 
+# prints out the first five congestion window values if possible
+def print_first_five_cwinds(num, rtt):
+    ts_lower_bound = flows[num][3].ts
+    ts_upper_bound = flows[num][3].ts + rtt
+    ceiling = flows[num][len(flows[num]) - 1].ts
+    for i in range(0, 5):
+        packets_in_window = 0
+        last_pkt = flows[num][3]
+        if ts_upper_bound <= ceiling:
+            for pkt in flows[num]:
+                if ts_lower_bound <= pkt.ts < ts_upper_bound:
+                    packets_in_window = packets_in_window + 1
+                    last_pkt = pkt
+            print(packets_in_window)
+            ts_lower_bound = ts_lower_bound
+            for ack_pkt in flows[num]:
+                if ack_pkt.eth.data.data.ack == last_pkt.eth.data.data.seq + len(last_pkt.eth.data.data.data):
+                    rtt = calculate_new_rtt(rtt, ack_pkt.ts - last_pkt.ts)
+                    break
+            ts_upper_bound = ts_upper_bound + rtt
+        elif ts_upper_bound > ceiling and i < 3:
+            for pkt in flows[num]:
+                if ts_lower_bound <= pkt.ts <= ceiling:
+                    packets_in_window = packets_in_window + 1
+            print(packets_in_window)
+            break
+        else:
+            break
+
+
+# calculate the new RTT given old RTT and the time between the sender sending a packet and the acknowledgement
+def calculate_new_rtt(old_rtt, new_rtt):
+    return 0.875 * old_rtt + 0.125 * new_rtt
+
+
 # calculates the throughput from the first packet sent after the handshake to the FIN sent by the receiver
 def calculate_throughput(num):
+    # TODO: might change depending on which FIN I use, right now determined based on FIN sent by receiver
+    start_ts = flows[num][0].ts
+    end_ts = flows[num][len(flows[num]) - 2].ts
+    diff_ts = end_ts - start_ts
     data_sent_over_flow = 0
     for pkt in flows[num]:
-        tcp_size = len(pkt.data.data)  # length of TCP segment
+        tcp_size = len(pkt.eth.data.data)  # length of TCP segment
         data_sent_over_flow = data_sent_over_flow + tcp_size
-    return 0
+    data_sent_over_flow = data_sent_over_flow - len(flows[num][len(flows[num]) - 1].eth.data.data)
+    throughput = float(data_sent_over_flow)/diff_ts
+    # print(start_ts)
+    # print(end_ts)
+    # print(diff_ts)
+    # print(data_sent_over_flow)
+    return throughput
 
 
 # calculate scaling factor
@@ -83,7 +128,7 @@ def check_flows(tcp_to_check):
 
 
 # reads the packets listed in pcap file
-def analyze_pcap_tcp():
+def read_pcap_tcp():
     for ts, buf in pcap:
         eth = dpkt.ethernet.Ethernet(buf)
         packet = Packet(ts, eth)
@@ -102,33 +147,58 @@ flow_ids = []
 file_name = 'assignment2.pcap'  # sys.argv[1]
 f = open(file_name, 'rb')
 pcap = dpkt.pcap.Reader(f)
-
-analyze_pcap_tcp()
-
-print(len(flow_ids))
-print(flow_ids)
-
+read_pcap_tcp()
+# sorting the packets into flows
 for pkt in unsorted_packet:
     sort_flows(pkt)
-print(flows[0][4].eth.data.data.seq)
-print(flows[0][4].eth.data.data.ack)
-
-print(unsorted_packet.__len__())
-print(len(flows[0]))
-print(len(flows[1]))
-print(len(flows[2]))
 
 print(str(len(flows)) + " TCP flows initiated from sender")
 for id in flow_ids:
+    print("____________________________________________________________________________________\n")
     num = flow_ids.index(id)
-    print(flows[num][0].ts)
     scaling_factor = calculate_scaling_factor(num)
+    throughput = calculate_throughput(num)
+    # TODO: Explain in documentation that the corresponding response from receiver was done by adding length of
+    # TODO: the data to SEQ number of sender to get the SEQ of the next expected packet
     print("Source: " + flow_ids[num][0] + " at Port: " + str(flow_ids[num][1]) + " | Destination: " + flow_ids[num][2] + " at Port: " + str(flow_ids[num][3]))
-    print("\tTransaction 1: Sequence Number = " + str(flows[num][3].eth.data.data.seq))
-    print("\t               Acknowledgement Number = " + str(flows[num][3].eth.data.data.ack))
-    print("\t               Receive Window Size = " + str(flows[num][3].eth.data.data.win * scaling_factor))
-    print("\tTransaction 2: Sequence Number = " + str(flows[num][4].eth.data.data.seq))
-    print("\t               Acknowledgement Number = " + str(flows[num][4].eth.data.data.ack))
-    print("\t               Receive Window Size = " + str(flows[num][4].eth.data.data.win * scaling_factor) + "\n")
+    print("Throughput: " + str(throughput) + " bytes per second")
+    print("\n\tTransaction 1: " + flow_ids[num][0] + " to " + flow_ids[num][2])
+    print("\t          Sequence Number = " + str(flows[num][4].eth.data.data.seq))
+    print("\t          Acknowledgement Number = " + str(flows[num][4].eth.data.data.ack))
+    print("\t          Receive Window Size = " + str(flows[num][4].eth.data.data.win * scaling_factor))
+    rtt_calc_start = flows[num][4].ts
+    rtt_calc_end = 0
+    for pkt in flows[num]:
+        if pkt.eth.data.data.ack == flows[num][4].eth.data.data.seq + len(flows[num][4].eth.data.data.data):
+            rtt_calc_end = pkt.ts
+            print("\tTransaction 1: " + flow_ids[num][2] + " to " + flow_ids[num][0])
+            print("\t          Sequence Number = " + str(pkt.eth.data.data.seq))
+            print("\t          Acknowledgement Number = " + str(pkt.eth.data.data.ack))
+            print("\t          Receive Window Size = " + str(pkt.eth.data.data.win * scaling_factor) + "\n")
+    print("\tTransaction 2: " + flow_ids[num][0] + " to " + flow_ids[num][2])
+    print("\t          Sequence Number = " + str(flows[num][5].eth.data.data.seq))
+    print("\t          Acknowledgement Number = " + str(flows[num][5].eth.data.data.ack))
+    print("\t          Receive Window Size = " + str(flows[num][5].eth.data.data.win * scaling_factor))
+    for pkt in flows[num]:
+        if pkt.eth.data.data.ack == flows[num][5].eth.data.data.seq + len(flows[num][5].eth.data.data.data):
+            print("\tTransaction 2: " + flow_ids[num][2] + " to " + flow_ids[num][0])
+            print("\t          Sequence Number = " + str(pkt.eth.data.data.seq))
+            print("\t          Acknowledgement Number = " + str(pkt.eth.data.data.ack))
+            print("\t          Receive Window Size = " + str(pkt.eth.data.data.win * scaling_factor) + "\n")
+    rtt_calc = rtt_calc_end - rtt_calc_start
+    print("RTT: " + str(rtt_calc))
+    print("Using RTT of first transaction:")
+    print_first_five_cwinds(num, rtt_calc)
+
+    # probably will use handshake RTT
+    test = flows[num][2].ts - flows[num][0].ts
+    print("Handshake RTT: " + str(test))
+    print("Using Handshake RTT: ")
+    print_first_five_cwinds(num, test)
+
+    waverage = calculate_new_rtt(test, rtt_calc)
+    print("Average RTT: " + str(waverage))
+    print("Using Weighed Average:")
+    print_first_five_cwinds(num, waverage)
 
 f.close()
