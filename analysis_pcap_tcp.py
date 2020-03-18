@@ -1,4 +1,5 @@
 import dpkt
+import sys
 
 
 # a packet that contains the timestamp and information encapsulated in Ethernet
@@ -20,16 +21,22 @@ class Packet:
 
 # main method
 def main():
-    file_name = 'assignment2.pcap'  # sys.argv[1]
-    f = open(file_name, 'rb')
-    pcap = dpkt.pcap.Reader(f)
-    read_pcap_tcp(pcap)
-    # sorting the packets into flows
-    for pkt in unsorted_packet:
-        sort_flows(pkt)
-    # prints out data for user
-    printing_data()
-    f.close()
+    file_name = sys.argv[1]
+    try:
+        if not file_name.__contains__(".pcap"):
+            print("Please enter a valid pcap file name")
+        else:
+            f = open(file_name, 'rb')
+            pcap = dpkt.pcap.Reader(f)
+            read_pcap_tcp(pcap)
+            # sorting the packets into flows
+            for pkt in unsorted_packet:
+                sort_flows(pkt)
+            # prints out data for user
+            printing_data()
+            f.close()
+    except FileNotFoundError:
+        print("Please enter a valid pcap file name")
 
 
 # prints out the first five congestion window values if possible
@@ -216,11 +223,8 @@ def printing_data():
         print("\t          Sequence Number = " + str(flows[num][4].eth.data.data.seq))
         print("\t          Acknowledgement Number = " + str(flows[num][4].eth.data.data.ack))
         print("\t          Receive Window Size = " + str(flows[num][4].eth.data.data.win * scaling_factor))
-        rtt_calc_start = flows[num][4].ts
-        rtt_calc_end = 0
         for pkt in flows[num]:
-            if pkt.eth.data.data.ack == flows[num][4].eth.data.data.seq:  # + len(flows[num][4].eth.data.data.data):
-                rtt_calc_end = pkt.ts
+            if pkt.eth.data.data.ack == flows[num][4].eth.data.data.seq + len(flows[num][4].eth.data.data.data):
                 print("\tTransaction 1: " + flow_ids[num][2] + " to " + flow_ids[num][0])
                 print("\t          Sequence Number = " + str(pkt.eth.data.data.seq))
                 print("\t          Acknowledgement Number = " + str(pkt.eth.data.data.ack))
@@ -230,7 +234,7 @@ def printing_data():
         print("\t          Acknowledgement Number = " + str(flows[num][5].eth.data.data.ack))
         print("\t          Receive Window Size = " + str(flows[num][5].eth.data.data.win * scaling_factor))
         for pkt in flows[num]:
-            if pkt.eth.data.data.ack == flows[num][5].eth.data.data.seq:  # + len(flows[num][5].eth.data.data.data):
+            if pkt.eth.data.data.ack == flows[num][5].eth.data.data.seq + len(flows[num][5].eth.data.data.data):
                 print("\tTransaction 2: " + flow_ids[num][2] + " to " + flow_ids[num][0])
                 print("\t          Sequence Number = " + str(pkt.eth.data.data.seq))
                 print("\t          Acknowledgement Number = " + str(pkt.eth.data.data.ack))
@@ -250,4 +254,8 @@ sender_pkts = []
 receiver_pkts = []
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except IndexError:
+        print("Please specify a pcap file name after \"python analysis_pcap_tcp.py\"\nFor example: "
+              "\"> python analysis_pcap_tcp.py assignment2.pcap\"")
